@@ -1,0 +1,174 @@
+# National Emissions Inventory (NEI)
+
+ 
+```{r}
+# set up working directory
+setwd('/home/daria/Courses/R/Coursera/EDA/Week3/exdata-data-NEI_data')
+library(dplyr)
+library(ggplot2)
+
+# read two files
+NEI <- readRDS("summarySCC_PM25.rds")
+SCC <- readRDS("Source_Classification_Code.rds")
+SCC1 <- select(SCC, SCC, Short.Name, SCC.Level.Two)
+```
+
+
+## First look at data 
+```{r}
+# merging data
+data <- merge(NEI, SCC1, by = "SCC")
+
+head(data)
+names(data)
+```
+
+
+## How total emissions from PM2.5 decreased in the United States from 1999 to 2008? 
+```{r}
+# group data by year
+by_year <- group_by(data, year)
+
+# calculate sum of emissions for each year
+by_year_total <- summarize(by_year, total_emission = sum(Emissions))
+by_year_total
+
+# create plot
+ggplot(data = by_year_total, aes(x = factor(year), y = total_emission,)) +
+ geom_bar(stat='identity', fill = 'red')+
+  ggtitle('PM2.5 Emission in USA in 1999 - 2008')+
+  xlab('Year') +
+  ylab('Total Emission')
+
+# save plot
+ggsave(file = 'plot1.png')
+```
+
+## How total emissions from PM2.5 decreased in the Baltimore City, Maryland (fips == "24510") from 1999 to 2008? 
+```{r}
+# filtering grouped by year data by fip of Baltimore City
+balt_by_year <- filter(by_year, fips == '24510')
+
+# get the sum of emission for Baltimore for each year
+balt_by_year_total <- summarize(balt_by_year, total_emission = sum(Emissions))
+balt_by_year_total
+
+# create plot
+ggplot(data = balt_by_year_total, aes(x = factor(year), y = total_emission,)) +
+ geom_bar(stat='identity', fill = 'blue')+
+  ggtitle('PM2.5 Emission in the Baltimore City in 1999 - 2008')+
+  xlab('Year') +
+  ylab('Total Emission')
+
+#save plot
+ ggsave(file = 'plot2.png')
+```
+
+
+## Of the four types of sources indicated by the type (point, nonpoint, onroad, nonroad) variable, which of these four sources have seen decreases in emissions from 1999–2008 for Baltimore City? Which have seen increases in emissions from 1999–2008? 
+```{r}
+# filter merged data by fip of Baltimore
+data_balt <- filter(data, fips == '24510')
+
+# group it by year and type
+by_year_type <- group_by(data_balt, year, type)
+
+# sum emissions for each year and year type
+by_year_type_sum <- summarise(by_year_type, emission = sum(Emissions))
+
+# ungroup dataframe before plotting
+by_year_type_sum <- ungroup(by_year_type_sum)
+by_year_type_sum
+
+# create plot
+ggplot(data = by_year_type_sum, aes(x = year, y = as.numeric(emission))) +
+ geom_line(aes(color = type), size = 4)+
+  ggtitle('PM2.5 Emission in the Baltimore in 1999 - 2008')+
+  xlab('Year') +
+  ylab('Total Emission')
+
+# save plot
+ggsave(file = 'plot3.png')
+```
+
+## Across the United States, how have emissions from coal combustion-related sources changed from 1999–2008?
+```{r}
+# get the observations with combustion and coal only
+comb <- data[grep('[cC]omb',data$Short.Name),]
+comb_coal <- comb[grep('[cC]oal',comb$Short.Name),]
+
+# group data by year and find sum of emissions by each year
+by_year <- group_by(comb_coal, year)
+by_year_total <- summarize(by_year, total_emission = sum(Emissions))
+by_year_total
+
+#create plot
+ggplot(data = by_year_total , aes(x = factor(year), y = total_emission)) +
+ geom_bar(fill =I('#FF8B00'), stat = 'identity')+
+  ggtitle('Emissions from coal combustion-related sources in 1999–2008')+
+  xlab('Year') +
+  ylab('Total Emission')
+
+# save plot
+ ggsave(file = 'plot4.png')
+```
+
+## How have emissions from motor vehicle sources changed from 1999–2008 in Baltimore City?
+```{r}
+# filter data for Baltimore
+balt <- filter(data, fips == 24510)
+
+# get data for emissions from motor vehicle sources
+vehicle <- balt[grep('[vV]ehicle',balt$SCC.Level.Two),]
+
+# group by year and calculate total emission for each year
+by_year <- group_by(vehicle, year)
+by_year_total <- summarize(by_year, total_emission = sum(Emissions))
+
+# create plot
+ggplot(data = by_year_total , aes(x = factor(year), y = total_emission)) +
+ geom_bar(fill =I('#66CD00'), stat = 'identity')+
+  ggtitle('Emissions from vehicle sources in 1999–2008')+
+  xlab('Year') +
+  ylab('Total Emission')
+
+# save plot
+ ggsave(file = 'plot5.png')
+```
+
+## Compare emissions from motor vehicle sources in Baltimore City with emissions from motor vehicle sources in Los Angeles County, California (fips == "06037"). Which city has seen greater changes over time in motor vehicle emissions?
+
+```{r}
+# filter data for Baltimore and Los Angeles 
+bl_la <- filter(data, fips == '24510' | fips == '06037' )
+table(bl_la$fips)
+
+# get data for emissions from motor vehicle sources
+vehicle <- bl_la[grep('[vV]ehicle',bl_la$SCC.Level.Two),]
+
+# group by year and fips and calculate total emission for each year
+by_year_fips <- group_by(vehicle, year, fips)
+by_year_fips_total <- summarize(by_year_fips, total_emission = sum(Emissions))
+
+# ungroup dataframe before plotting
+by_year_fips_total <- ungroup(by_year_fips_total)
+by_year_fips_total
+
+# convert fips into city names
+names(by_year_fips_total)[2] <- c("City")
+by_year_fips_total$City[by_year_fips_total$City == '06037'] <- "Los Angeles"
+by_year_fips_total$City[by_year_fips_total$City == '24510'] <- "Baltimore"
+
+# create plot
+ggplot(data = by_year_fips_total , aes(x = year, y = total_emission)) +
+ geom_line(aes(color = City), size = 4, stat = 'identity')+
+  ggtitle('Emissions from vehicle sources in 1999–2008')+
+  xlab('Year') +
+  ylab('Total Emission')
+
+# save plot
+ ggsave(file = 'plot6.png')
+```
+
+
+
